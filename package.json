@@ -1,0 +1,17 @@
+{
+  "name": "musifly",
+  "version": "1.0.0",
+  "description": "A modern music streaming app with TypeScript frontend and Python backend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^5.0.0"
+  }
+}
