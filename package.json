@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit"
   },
-  "dependencies": {},
   "devDependencies": {
+    "terser": "^5.50.0",
     "typescript": "^7.0.2",
     "vite": "^5.0.0"
   }
