@@ -3,13 +3,25 @@
  * Handles UI interactions and integration with Spotify API
  */
 
+import { login, isLoggedIn, handleCallback } from './spotify';
+
+// Configure API base URL
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
-function initializeApp() {
-    console.log('🎵 Spotify Clone initialized');
+async function initializeApp() {
+    console.log('🎵 Musifly initialized');
+    
+    // Handle OAuth callback
+    try {
+        await handleCallback();
+    } catch (error) {
+        console.log('Not in callback flow');
+    }
     
     // Setup event listeners
     setupSearchListener();
@@ -18,9 +30,18 @@ function initializeApp() {
     setupSidebarNavigation();
     setupActivityListeners();
     
-    // Load initial data
-    loadPlaylistData();
-    loadFriendActivity();
+    // Check if logged in and load data
+    if (isLoggedIn()) {
+        loadPlaylistData();
+        loadFriendActivity();
+    } else {
+        // Show login prompt
+        const makeForYouBtn = document.querySelector('.btn-primary');
+        makeForYouBtn?.addEventListener('click', () => {
+            console.log('Starting Spotify login...');
+            login().catch(error => console.error('Login failed:', error));
+        });
+    }
 }
 
 // ==================== SEARCH ==================== 
@@ -36,10 +57,30 @@ function setupSearchListener() {
     }, 500));
 }
 
-function performSearch(query: string) {
-    console.log(`Searching for: ${query}`);
-    // TODO: Integrate with backend search API
-    // fetch(`/api/search?q=${encodeURIComponent(query)}`)
+async function performSearch(query: string) {
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=10`);
+        const data = await response.json();
+        console.log('Search results:', data);
+        if (data.tracks?.items) {
+            displaySearchResults(data.tracks.items);
+        }
+    } catch (error) {
+        console.error('Search failed:', error);
+    }
+}
+
+function displaySearchResults(tracks: any[]) {
+    const tracksList = document.querySelector('.tracks-list');
+    if (!tracksList) return;
+    
+    tracksList.innerHTML = tracks.map(track => `
+        <div class="track-item">
+            <div class="col-title">${track.name}</div>
+            <div class="col-artist">${track.artists?.[0]?.name || 'Unknown'}</div>
+            <div class="col-date">${new Date(track.release_date || '').toLocaleDateString()}</div>
+        </div>
+    `).join('');
 }
 
 // ==================== PLAYLIST INTERACTION ====================
@@ -182,29 +223,58 @@ function setupActivityListeners() {
 }
 
 // ==================== DATA LOADING ====================
-function loadPlaylistData() {
-    // TODO: Replace with actual API data
-    const playlistData = {
-        title: 'Drive Loud',
-        description: 'Forget the traffic stress.',
-        creator: 'Spotify',
-        stats: '50 songs, 2 hr 46 min',
-        image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200&h=200&fit=crop'
-    };
-    
-    document.getElementById('playlistTitle')!.textContent = playlistData.title;
-    document.getElementById('playlistDescription')!.textContent = playlistData.description;
-    document.getElementById('playlistCreator')!.textContent = playlistData.creator;
-    document.getElementById('playlistStats')!.textContent = playlistData.stats;
-    
-    const imageOverlay = document.querySelector('.image-overlay') as HTMLElement;
-    if (imageOverlay) {
-        imageOverlay.style.backgroundImage = `url('${playlistData.image}')`;
+async function loadPlaylistData() {
+    try {
+        // Fetch user's top tracks from backend
+        const response = await fetch('/api/user/top-tracks?limit=50');
+        const data = await response.json();
+        
+        if (data.items && data.items.length > 0) {
+            const totalDuration = data.items.reduce((sum: number, track: any) => sum + (track.duration_ms || 0), 0);
+            const hours = Math.floor(totalDuration / (1000 * 60 * 60));
+            const mins = Math.floor((totalDuration % (1000 * 60 * 60)) / (1000 * 60));
+            
+            document.getElementById('playlistTitle')!.textContent = 'Your Top Tracks';
+            document.getElementById('playlistDescription')!.textContent = 'Your most played songs on Spotify';
+            document.getElementById('playlistCreator')!.textContent = 'Spotify';
+            document.getElementById('playlistStats')!.textContent = `${data.items.length} songs, ${hours}h ${mins}m`;
+            
+            // Display tracks in table
+            displayTracks(data.items);
+            
+            // Use first track's image if available
+            const imageUrl = data.items[0]?.album?.images?.[0]?.url || 
+                            'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200&h=200&fit=crop';
+            const imageOverlay = document.querySelector('.image-overlay') as HTMLElement;
+            if (imageOverlay) {
+                imageOverlay.style.backgroundImage = `url('${imageUrl}')`;  
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load playlist:', error);
+        // Fallback to default data
+        document.getElementById('playlistTitle')!.textContent = 'Your Top Tracks';
+        document.getElementById('playlistDescription')!.textContent = 'Sign in to see your Spotify tracks';
+        document.getElementById('playlistCreator')!.textContent = 'Spotify';
+        document.getElementById('playlistStats')!.textContent = 'Loading...';
     }
 }
 
-function loadFriendActivity() {
-    // TODO: Replace with actual API data
+function displayTracks(tracks: any[]) {
+    const tracksList = document.querySelector('.tracks-list');
+    if (!tracksList) return;
+    
+    tracksList.innerHTML = tracks.map(track => `
+        <div class="track-item">
+            <div class="col-title">${track.name}</div>
+            <div class="col-artist">${track.artists?.[0]?.name || 'Unknown Artist'}</div>
+            <div class="col-date">${new Date(track.album?.release_date || '').toLocaleDateString()}</div>
+        </div>
+    `).join('');
+}
+
+async function loadFriendActivity() {
+    // Using mock data for now (friend activity not in standard Spotify API)
     const activities = [
         {
             name: 'Pollen Merida',
